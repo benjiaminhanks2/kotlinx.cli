@@ -562,7 +562,7 @@ open class ArgParser(
             while (argIterator.hasNext()) {
                 val arg = argIterator.next()
                 // Check for subcommands.
-                @UseExperimental(ExperimentalCli::class)
+                @OptIn(ExperimentalCli::class)
                 subcommands.forEach { (name, subcommand) ->
                     if (arg == name) {
                         // Use parser for this subcommand.
