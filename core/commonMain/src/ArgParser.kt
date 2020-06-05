@@ -185,7 +185,9 @@ open class ArgParser(
         /* JVM style: both full and short names are prefixed with one hyphen "-". */
         JVM,
         /* GNU style: the full name of an option is prefixed with two hyphens "--" and "=" between options and value
-         and the short name — with one "-". */
+         and the short name — with one "-".
+         Detailed information https://www.gnu.org/software/libc/manual/html_node/Argument-Syntax.html
+         */
         GNU
     }
 
@@ -224,6 +226,13 @@ open class ArgParser(
         description: String? = null,
         deprecatedWarning: String? = null
     ): SingleNullableOption<T> {
+        if (prefixStyle == OptionPrefixStyle.GNU && shortName != null)
+            require(shortName.length == 1) {
+                """
+                GNU standart for options allow to use short form whuch consists of one character. 
+                For more information, please, see https://www.gnu.org/software/libc/manual/html_node/Argument-Syntax.html
+                """.trimIndent()
+            }
         val option = SingleNullableOption(OptionDescriptor(optionFullFormPrefix, optionShortFromPrefix, type,
                 fullName, shortName, description, deprecatedWarning = deprecatedWarning), CLIEntityWrapper())
         option.owner.entity = option
@@ -373,21 +382,31 @@ open class ArgParser(
             treatAsOption = false
             return false
         }
-        if (candidate.startsWith(optionFullFormPrefix)) {
-            val optionString = candidate.substring(optionFullFormPrefix.length)
-            val argValue = if (prefixStyle == OptionPrefixStyle.GNU) null else options[optionString]
-            argValue?.let { saveStandardOptionForm(it, argIterator) } ?: run {
-                // Check GNU style of options.
-                if (prefixStyle == OptionPrefixStyle.GNU) {
-                    val optionParts = optionString.split('=', limit = 2)
-                    if (optionParts.size != 2) {
-                        return false
-                    } else {
-                        options[optionParts[0]]?.let { saveAsOption(it, optionParts[1]) } ?: return false
-                    }
+        if (!candidate.startsWith(optionFullFormPrefix))
+            return false
+
+        val optionString = candidate.substring(optionFullFormPrefix.length)
+        val argValue = if (prefixStyle == OptionPrefixStyle.GNU) null else options[optionString]
+        if (argValue != null) {
+            saveStandardOptionForm(argValue, argIterator)
+            return true
+        } else {
+            // Check GNU style of options.
+            if (prefixStyle == OptionPrefixStyle.GNU) {
+                // Option without a parameter.
+                if (options[optionString]?.descriptor?.type?.hasParameter == false) {
+                    saveOptionWithoutParameter(options[optionString]!!)
+                    return true
+                }
+                // Option with parameters.
+                val optionParts = optionString.split('=', limit = 2)
+                if (optionParts.size != 2)
+                    return false
+                if (options[optionParts[0]] != null) {
+                    saveAsOption(options[optionParts[0]]!!, optionParts[1])
+                    return true
                 }
             }
-            return true
         }
         return false
     }
@@ -432,48 +451,36 @@ open class ArgParser(
      * @param argIterator iterator over command line arguments.
      */
     private fun recognizeAndSaveOptionShortForm(candidate: String, argIterator: Iterator<String>): Boolean {
-        if (candidate.startsWith(optionShortFromPrefix)) {
-            // Try to find exact match.
-            val option = candidate.substring(optionShortFromPrefix.length)
-            val argValue = shortNames[option]
-            argValue?.let { saveStandardOptionForm(it, argIterator) } ?: run {
-                if (prefixStyle == OptionPrefixStyle.GNU) {
-                    // Try to find collapsed form.
-                    shortNames.forEach { (name, value) ->
-                        if (option.startsWith("$name")) {
-                            // Form with value after short form without separator.
-                            if (value.descriptor.type.hasParameter) {
-                                saveAsOption(value, option.substring(name.length))
-                                return true
-                            } else {
-                                // Form with several short forms as one string.
-                                val optionsList = mutableListOf(value)
-                                var otherBooleanOptions = option.substring(name.length)
-                                while (otherBooleanOptions.isNotEmpty()) {
-                                    run loop@{
-                                        shortNames.forEach { (name, value) ->
-                                            if (otherBooleanOptions.startsWith("$name") &&
-                                                !value.descriptor.type.hasParameter) {
-                                                optionsList.add(value)
-                                                otherBooleanOptions = otherBooleanOptions.substring(name.length)
-                                                return@loop
-                                            }
-                                        }
-                                        if (otherBooleanOptions.isNotEmpty())
-                                            return false
-                                    }
-                                }
-                                optionsList.forEach { saveOptionWithoutParameter(it) }
-                                return true
-                            }
-                        }
-                    }
-                }
+        if (!candidate.startsWith(optionShortFromPrefix)) return false
+        // Try to find exact match.
+        val option = candidate.substring(optionShortFromPrefix.length)
+        val argValue = shortNames[option]
+        if (argValue != null) {
+            saveStandardOptionForm(argValue, argIterator)
+        } else {
+            if (prefixStyle != OptionPrefixStyle.GNU)
                 return false
+
+            // Try to find collapsed form.
+            val firstOption = shortNames["${option[0]}"] ?: return false
+            // Form with value after short form without separator.
+            if (firstOption.descriptor.type.hasParameter) {
+                saveAsOption(firstOption, option.substring(1))
+            } else {
+                // Form with several short forms as one string.
+                val optionsList = mutableListOf(firstOption)
+                val otherBooleanOptions = option.substring(1)
+                for (option in otherBooleanOptions) {
+                    if (shortNames["$option"]?.descriptor?.type?.hasParameter != false) {
+                        return false
+                    }
+                    optionsList.add(shortNames["$option"]!!)
+                }
+                optionsList.forEach { saveOptionWithoutParameter(it) }
             }
-            return true
-        } else
-            return false
+
+        }
+        return true
     }
 
     /**

@@ -62,7 +62,7 @@ class OptionsTests {
         val verbose by argParser.option(ArgType.Boolean, "verbose", "v", "Verbose print")
         val shortForm by argParser.option(ArgType.Boolean, "short", "s", "Short output form").default(false)
         val text by argParser.option(ArgType.Boolean, "text", "t", "Use text format").default(false)
-        argParser.parse(arrayOf("--verbose=true", "--", "out.txt", "--input.txt"))
+        argParser.parse(arrayOf("--verbose", "--", "out.txt", "--input.txt"))
         assertEquals("out.txt", output)
         assertEquals("--input.txt", input)
         assertEquals(verbose, true)
