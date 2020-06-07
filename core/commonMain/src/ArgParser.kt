@@ -451,14 +451,15 @@ open class ArgParser(
      * @param argIterator iterator over command line arguments.
      */
     private fun recognizeAndSaveOptionShortForm(candidate: String, argIterator: Iterator<String>): Boolean {
-        if (!candidate.startsWith(optionShortFromPrefix)) return false
+        if (!candidate.startsWith(optionShortFromPrefix) ||
+            optionFullFormPrefix != optionShortFromPrefix && candidate.startsWith(optionFullFormPrefix)) return false
         // Try to find exact match.
         val option = candidate.substring(optionShortFromPrefix.length)
         val argValue = shortNames[option]
         if (argValue != null) {
             saveStandardOptionForm(argValue, argIterator)
         } else {
-            if (prefixStyle != OptionPrefixStyle.GNU)
+            if (prefixStyle != OptionPrefixStyle.GNU || option.isEmpty())
                 return false
 
             // Try to find collapsed form.
@@ -468,17 +469,14 @@ open class ArgParser(
                 saveAsOption(firstOption, option.substring(1))
             } else {
                 // Form with several short forms as one string.
-                val optionsList = mutableListOf(firstOption)
                 val otherBooleanOptions = option.substring(1)
                 for (option in otherBooleanOptions) {
                     if (shortNames["$option"]?.descriptor?.type?.hasParameter != false) {
                         return false
                     }
-                    optionsList.add(shortNames["$option"]!!)
                 }
-                optionsList.forEach { saveOptionWithoutParameter(it) }
+                option.forEach { saveOptionWithoutParameter(shortNames["$it"]!!) }
             }
-
         }
         return true
     }
