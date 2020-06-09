@@ -470,12 +470,13 @@ open class ArgParser(
             } else {
                 // Form with several short forms as one string.
                 val otherBooleanOptions = option.substring(1)
+                saveOptionWithoutParameter(firstOption)
                 for (option in otherBooleanOptions) {
                     if (shortNames["$option"]?.descriptor?.type?.hasParameter != false) {
-                        return false
+                        printError("Unknown option $optionShortFromPrefix$option in option combination $candidate.")
                     }
+                    saveOptionWithoutParameter(shortNames["$option"]!!)
                 }
-                option.forEach { saveOptionWithoutParameter(shortNames["$it"]!!) }
             }
         }
         return true
